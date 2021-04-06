@@ -2,6 +2,7 @@ import json
 import os
 
 ID_RSA = "/root/.ssh/id_rsa"
+NETRC = "/root/.netrc"
 
 if "SOURCES" in os.environ:
     raw = os.environ["SOURCES"]
@@ -16,3 +17,12 @@ if "SOURCES" in os.environ:
             f.close()
 
             os.chmod(ID_RSA, 0o400)
+        if "data" in item and "password" in item["data"]:
+            print("Find http password, write to $NETRC! \n")
+            password = item["data"]["password"]
+            username = item["data"]["username"]
+            f = open(NETRC, "w")
+            f.write("machine gitee.com login %s password %s" % (username, password))
+            f.close()
+
+            os.chmod(NETRC, 0o400)
