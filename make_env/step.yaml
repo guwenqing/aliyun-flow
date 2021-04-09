@@ -2,7 +2,7 @@
 name: Make Env
 sign: make_env
 description: Build env with make command
-image: registry.cn-hangzhou.aliyuncs.com/fc-public/make_env:1.2
+image: registry.cn-hangzhou.aliyuncs.com/fc-public/make_env:1.5
 items:
   - label: 执行命令
     name: command

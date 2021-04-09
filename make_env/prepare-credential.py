@@ -20,9 +20,9 @@ if "SOURCES" in os.environ:
         if "data" in item and "password" in item["data"]:
             print("Find http password, write to $NETRC! \n")
             password = item["data"]["password"]
-            username = item["data"]["username"]
+            username = item["data"]["userName"]
             f = open(NETRC, "w")
-            f.write("machine gitee.com login %s password %s" % (username, password))
+            f.write("machine gitee.com login %s password %s\n" % (username, password))
             f.close()
 
             os.chmod(NETRC, 0o400)
