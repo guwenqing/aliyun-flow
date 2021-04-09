@@ -46,8 +46,8 @@ function parse() {
 }
 
 function redline() {
-  echo [$stepIdentifier] STAT_INFO_TITLE: \"\" | tee $WORK_SPACE/params
-  parse $@ | tee -a $WORK_SPACE/params
+  echo [$stepIdentifier] STAT_INFO_TITLE: \"\" | tee >> $WORK_SPACE/params
+  parse $@ | tee -a >> $WORK_SPACE/params
 }
 
 export -f redline parse report single redlineCheck 2>>/dev/null

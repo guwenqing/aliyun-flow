@@ -1,0 +1,12 @@
+---
+name: NSIS
+sign: nsis
+description: Create nsis installer
+image: registry.cn-hangzhou.aliyuncs.com/fc-public/nsis:1.0
+items:
+  - label: 执行命令
+    name: command
+    type: shell
+    value: |
+      # input your command here
+      /nsis/Bin/makensis -V4 PATH_TO_INSTALLER_SCRIPT
