@@ -2,3 +2,5 @@ GitPython
 aliyun-python-sdk-core
 aliyun-python-sdk-devops-rdc
 requests
+yamlordereddictloader
+pyyaml
