@@ -1,8 +1,8 @@
 ---
-name: Make Env
-sign: make_env
+name: FC Env
+sign: fc_env
 description: Build env with make command
-image: registry.cn-hangzhou.aliyuncs.com/fc-public/make_env:1.5
+image: registry.cn-hangzhou.aliyuncs.com/fc-public/fc_env:1.0
 items:
   - label: 执行命令
     name: command
