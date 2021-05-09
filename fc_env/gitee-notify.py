@@ -1,11 +1,10 @@
-import os
 import logging
+import os
 import time
-import json
-
 from aliyunsdkcore.client import AcsClient
-from aliyunsdkdevops_rdc.request.v20200303.GetPipelineInstanceBuildNumberStatusRequest import \
-    GetPipelineInstanceBuildNumberStatusRequest
+
+from my import flow
+from my import gitee
 
 ALIYUN_LOC = "cn-beijing"
 ALIYUN_PK = os.environ["ALIYUN_AK"]
@@ -22,43 +21,35 @@ client.add_endpoint("cn-beijing", "devops-rdc", "api-devops.cn-beijing.aliyuncs.
 pipeline_id = os.environ["PIPELINE_ID"]
 build_number = os.environ["BUILD_NUMBER"]
 org_id = os.environ["ENGINE_GLOBAL_PARAM_ORGANIZATION_ID"]
+gitee_token = os.environ["GITEE_TOKEN"]
+pipeline_url = flow.make_pipeline_url(pipeline_id, build_number)
+
 logging.basicConfig(level=logging.DEBUG)
 
+pr = gitee.parse_gitee_webhook_entry("pull_request")
 
-def get_main_stage(clt):
-    request = GetPipelineInstanceBuildNumberStatusRequest()
-    request.set_BuildNum(build_number)
-    request.set_OrgId(org_id)
-    request.set_PipelineId(pipeline_id)
-    resp_str = clt.do_action_with_exception(request)
-    resp = json.loads(resp_str)
-
-    for group in resp["Object"]["Groups"]:
-        for stage in group["Stages"]:
-            for comp in stage["Components"]:
-                if comp["Name"] == "Main":
-                    return stage
-
-    return None
-
+if pr is not None:
+    gitee.pr_comment(pr, gitee_token, "Test is started! URL: %s" % pipeline_url)
+    gitee.pr_reset_test(pr, gitee_token)
 
 while True:
-    ms = get_main_stage(client)
+    ms = flow.get_main_stage(client, build_number, org_id, pipeline_id)
 
     if ms is None:
         logging.error("Cannot find Main stage to monitor, please make sure the main stage is named as Main")
         exit(1)
 
-    if ms["Status"] == "FINISH":
+    status = flow.analyze_main_stage(ms)
+
+    if status != "SUCCESS" and status != "FAIL":
+        logging.info("Main stage is still running: %s" % status)
+        time.sleep(5)
+    else:
+        logging.info("Main stage is %s" % status)
+
+        if pr is not None:
+            if status == "SUCCESS":
+                gitee.pr_accept_test(pr, gitee_token)
+            else:
+                gitee.pr_comment(pr, gitee_token, "Test is not successful!")
         break
-
-    logging.info("Main stage is still running: %s" % ms.status)
-    time.sleep(5000)
-
-pipeline_status = "SUCCESS"
-for comp in ms["Components"]:
-    if comp == "FAIL":
-        pipeline_status = "FAIL"
-        break
-
-logging.info("Main stage is %s" % pipeline_status)
