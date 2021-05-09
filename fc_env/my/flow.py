@@ -29,7 +29,7 @@ def analyze_main_stage(ms):
 
     ret = "SUCCESS"
     for comp in ms["Components"]:
-        if comp == "FAIL":
+        if comp["Status"] == "FAIL":
             ret = "FAIL"
             break
 

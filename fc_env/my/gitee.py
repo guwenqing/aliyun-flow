@@ -30,10 +30,11 @@ def parse_gitee_webhook_entry(key):
             ret["body"] = os.environ["body"]
 
         value_to_parse = value_to_parse.replace("description=, ", "")
-
+        value_to_parse = value_to_parse.replace(", ", ",")
         value_to_parse = re.sub(pattern=r'([^=^{^}^[^\]^,^]+)', repl=r'"\1"', string=value_to_parse)
         value_to_parse = value_to_parse.replace("=", ":")
-        value_to_parse = value_to_parse.replace("\" ", "\"")
+
+    logging.debug("Value before parsing = \n %s" % value_to_parse)
 
     obj = json.loads(value_to_parse)
     ret.update(obj)
