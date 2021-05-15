@@ -1,6 +1,7 @@
 import logging
 import os
 import time
+
 from aliyunsdkcore.client import AcsClient
 
 from my import flow
@@ -22,6 +23,7 @@ pipeline_id = os.environ["PIPELINE_ID"]
 build_number = os.environ["BUILD_NUMBER"]
 org_id = os.environ["ENGINE_GLOBAL_PARAM_ORGANIZATION_ID"]
 gitee_token = os.environ["GITEE_TOKEN"]
+oss_prefix = os.environ["OSS_PREFIX"]
 pipeline_url = flow.make_pipeline_url(pipeline_id, build_number)
 
 logging.basicConfig(level=logging.DEBUG)
@@ -50,6 +52,9 @@ while True:
         if pr is not None:
             if status == "SUCCESS":
                 gitee.pr_accept_test(pr, gitee_token)
+                gitee.pr_comment(pr, gitee_token,
+                                 "product can be downloaded here: %s/object?path=VerifyPR%%2F%s%%2F" % (oss_prefix, build_number))
+
             else:
                 gitee.pr_comment(pr, gitee_token, "Test is not successful!")
         break

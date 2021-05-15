@@ -29,7 +29,7 @@ def parse_gitee_webhook_entry(key):
             value_to_parse = value_to_parse.replace("body=%s, " % os.environ["body"], "")
             ret["body"] = os.environ["body"]
 
-        value_to_parse = value_to_parse.replace("description=, ", "")
+        value_to_parse = re.sub(pattern=r'([a-z0-9A-Z]+=, )', repl=r'', string=value_to_parse)
         value_to_parse = value_to_parse.replace(", ", ",")
         value_to_parse = re.sub(pattern=r'([^=^{^}^[^\]^,^]+)', repl=r'"\1"', string=value_to_parse)
         value_to_parse = value_to_parse.replace("=", ":")
