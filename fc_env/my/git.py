@@ -3,6 +3,7 @@ import os
 import re
 import subprocess
 import tempfile
+import time
 
 import yaml
 import yamlordereddictloader
@@ -10,50 +11,76 @@ import yamlordereddictloader
 from . import gitee
 
 
-def _run_command(command):
+def __run_command(command, timeout=60):
     logging.debug("Execute: %s" % command)
-    result = os.system(command)
+    p = subprocess.Popen(['/bin/sh', '-c', '%s' % command])
+    try:
+        p.wait(timeout)
+    except subprocess.TimeoutExpired:
+        p.kill()
 
-    return result
+    return p.returncode
 
 
-def _run_command_with_output(command):
+def __run_command_with_output(command):
     logging.debug("Execute: %s" % command)
     result = subprocess.run(command, stdout=subprocess.PIPE, stderr=subprocess.PIPE, shell=True)
 
-    return result.stdout
+    return result.stdout.decode("utf-8").strip()
 
 
-def _get_folder_name(repo_url):
+def __get_folder_name(repo_url):
     sp = list(filter(lambda x: x.strip() != "", repo_url.split("/")))
     folder_name = re.sub("\\.git$", "", sp[-1])
 
     return folder_name
 
 
-def _cleanup_target(clone_to, folder_name):
-    if not os.path.exists(clone_to):
-        _run_command("mkdir -p \"%s\"" % clone_to)
-    else:
-        if os.path.exists(clone_to + "/" + folder_name):
-            _run_command("cd \"%s\" && rm -rf \"%s\"" % (clone_to, folder_name))
+def git_clone_or_update(repo_url, clone_to, folder_name, retry_times=10):
+    if folder_name is None:
+        folder_name = __get_folder_name(repo_url)
+
+    while retry_times > 0:
+        retry_times = retry_times - 1
+        try:
+            return __do_git_clone_or_update(repo_url, clone_to, folder_name)
+        except Exception as e:
+            logging.info("%s\nGit clone or update failed retry..." % str(e))
+            if retry_times > 0:
+                time.sleep(15)
+                target_path_full = os.path.join(clone_to, folder_name)
+                __run_command("rm -rf \"%s\"" % target_path_full)
+            else:
+                logging.error("Operation failed after retrying!")
+                raise e
 
 
-def do_git_clone(repo_url, clone_to, folder_name):
+def __do_git_clone_or_update(repo_url, clone_to, folder_name):
     logging.debug("Git clone %s: %s" % (repo_url, clone_to))
 
-    if folder_name is None:
-        folder_name = _get_folder_name(repo_url)
-    _cleanup_target(clone_to, folder_name)
+    target_path_full = os.path.join(clone_to, folder_name)
 
-    ret = _run_command("cd \"%s\" && git clone \"%s\" \"%s\"" % (clone_to, repo_url, folder_name))
+    # Not completed git clone operation will affect the overall
+    if os.path.exists(target_path_full):
+        git_check_path = __run_command_with_output("cd \"%s\" && git rev-parse --show-toplevel" % target_path_full)
+        target_path_full_absolute = os.path.abspath(target_path_full.strip())
+        if git_check_path != target_path_full_absolute:
+            raise Exception("Current path %s does not have correct git cloned, will be deleted." % target_path_full)
+
+    if os.path.exists(target_path_full):
+        logging.info("Clone path %s existed, try to update..." % target_path_full)
+        ret = __run_command(("cd \"%s\" && git fetch && git clean -xfd && " +
+                            "git reset HEAD --hard && git checkout master && git reset origin/master --hard")
+                            % target_path_full)
+    else:
+        ret = __run_command("cd \"%s\" && git clone \"%s\" \"%s\"" % (clone_to, repo_url, folder_name))
     if ret != 0:
-        raise Exception("Git clone failed!!")
-    return clone_to + "/" + folder_name
+        raise Exception("Git clone/update failed!!")
+    return target_path_full
 
 
-def do_git_clone_with_smart_detection(repo_url, clone_to, folder_name, pr):
-    main_repo_path = do_git_clone(repo_url, clone_to, folder_name)
+def prepare_git_with_detection(repo_url, clone_to, folder_name, pr):
+    repo_path = git_clone_or_update(repo_url, clone_to, folder_name)
 
     if pr is not None:
         is_matched = gitee.match_entry(pr, repo_url)
@@ -61,29 +88,28 @@ def do_git_clone_with_smart_detection(repo_url, clone_to, folder_name, pr):
 
         if is_matched:
             logging.info("Checkout to sha %s" % pr["head"]["sha"])
-            do_git_checkout(main_repo_path, pr["head"]["sha"])
+            do_git_checkout(repo_path, pr["head"]["sha"])
 
-    sha1 = do_get_sha1(main_repo_path)
+    sha1 = do_get_sha1(repo_path)
 
-    return main_repo_path, sha1
+    return repo_path, sha1
 
 
 def do_git_checkout(path, sha):
     logging.debug("Git checkout %s: %s" % (path, sha))
 
-    ret = _run_command("cd \"%s\" && git checkout \"%s\"" % (path, sha))
+    ret = __run_command("cd \"%s\" && git checkout \"%s\"" % (path, sha))
     if ret != 0:
         raise Exception("Git checkout failed!!")
 
 
 def do_get_sha1(path):
     logging.debug("Git get SHA1 %s" % path)
-    res = _run_command_with_output("cd \"%s\" && git rev-parse HEAD" % path)
-    return res.decode('UTF-8').strip()
+    return __run_command_with_output("cd \"%s\" && git rev-parse HEAD" % path)
 
 
 def get_baseline(path, baseline_file="baseline.yaml"):
-    absolute_path = os.path.abspath(path + "/" + baseline_file)
+    absolute_path = os.path.abspath(os.path.join(path, baseline_file))
     if os.path.exists(absolute_path):
         data = yaml.load(open(absolute_path), Loader=yamlordereddictloader.Loader)
         return data
@@ -92,7 +118,7 @@ def get_baseline(path, baseline_file="baseline.yaml"):
 
 
 def write_baseline(path, baseline, baseline_file="baseline.yaml"):
-    absolute_path = os.path.abspath(path + "/" + baseline_file)
+    absolute_path = os.path.abspath(os.path.join(path, baseline_file))
     yaml.dump(
         baseline,
         open(absolute_path, 'w'),
@@ -101,7 +127,7 @@ def write_baseline(path, baseline, baseline_file="baseline.yaml"):
 
 
 def clone_main_repo(repo_url, clone_to, folder_name, pr):
-    main_repo_path, sha1 = do_git_clone_with_smart_detection(repo_url, clone_to, folder_name, pr)
+    main_repo_path, sha1 = prepare_git_with_detection(repo_url, clone_to, folder_name, pr)
     logging.info("Main repo is cloned to: %s" % main_repo_path)
 
     baseline = get_baseline(main_repo_path)
@@ -115,34 +141,31 @@ def clone_main_repo(repo_url, clone_to, folder_name, pr):
     return main_repo_path, baseline
 
 
-def _copy_repo(source_path, clone_to, exploded):
-    command = "cd \"%s\" && cp -rf \"%s\" ." % (clone_to, source_path)
-
-    if exploded:
-        command = "cd \"%s\" && cp -rf %s/* ." % (clone_to, source_path)
-
-    logging.debug("Execute copy: %s" % command)
-
-    _run_command(command)
+def explode_repo(source_path, clone_to):
+    for d in os.listdir(source_path):
+        if d.startswith("."):
+            continue
+        full_source_path = os.path.join(source_path, d)
+        full_dest_path = os.path.join(clone_to, d)
+        command = "rm -rf \"%s\" && cp -rf \"%s\" \"%s\"" % (full_dest_path, full_source_path, full_dest_path)
+        __run_command(command)
 
 
 def setup_modules(main_repo_path, baseline, pr):
     temp_dir = tempfile.mkdtemp(prefix="git-")
 
     for repo_obj in baseline["repos"]:
-        if "sha1" not in repo_obj:
-            repo_obj["sha1"] = "master"
-
         if "explode" not in repo_obj:
             repo_obj["explode"] = False
 
-        temp_repo_path, sha1 = do_git_clone_with_smart_detection(repo_obj["repo"], temp_dir, None, pr)
+        clone_to = os.path.join(main_repo_path, repo_obj["clone_to"])
+
+        target_clone = temp_dir
+        if not repo_obj["explode"]:
+            target_clone = clone_to
+
+        temp_repo_path, sha1 = prepare_git_with_detection(repo_obj["repo"], target_clone, None, pr)
         repo_obj["sha1"] = sha1
 
-        clone_to = main_repo_path + "/" + repo_obj["clone_to"]
-
-        if not repo_obj["explode"]:
-            folder_name = _get_folder_name(repo_obj["repo"])
-            _cleanup_target(clone_to, folder_name)
-
-        _copy_repo(temp_repo_path, clone_to, repo_obj["explode"])
+        if repo_obj["explode"]:
+            explode_repo(temp_repo_path, clone_to)
