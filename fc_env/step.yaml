@@ -2,7 +2,7 @@
 name: FC Env
 sign: fc_env
 description: Build env with various toolboxes
-image: registry.cn-hangzhou.aliyuncs.com/fc-public/fc_env:1.21
+image: registry.cn-hangzhou.aliyuncs.com/fc-public/fc_env:1.23
 items:
   - label: 执行命令
     name: command

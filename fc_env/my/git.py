@@ -5,19 +5,30 @@ import subprocess
 import tempfile
 import time
 
+import psutil
 import yaml
 import yamlordereddictloader
 
 from . import gitee
 
 
-def __run_command(command, timeout=60):
+def __kill(proc_pid):
+    process = psutil.Process(proc_pid)
+    for proc in process.children(recursive=True):
+        proc.kill()
+    process.kill()
+
+
+def __run_command(command, timeout=300):
     logging.debug("Execute: %s" % command)
     p = subprocess.Popen(['/bin/sh', '-c', '%s' % command])
     try:
         p.wait(timeout)
     except subprocess.TimeoutExpired:
-        p.kill()
+        os.system("ps ux")
+        logging.error("Timed out and kill the process.")
+        __kill(p.pid)
+        os.system("ps ux")
 
     return p.returncode
 
@@ -70,7 +81,7 @@ def __do_git_clone_or_update(repo_url, clone_to, folder_name):
     if os.path.exists(target_path_full):
         logging.info("Clone path %s existed, try to update..." % target_path_full)
         ret = __run_command(("cd \"%s\" && git fetch && git clean -xfd && " +
-                            "git reset HEAD --hard && git checkout master && git reset origin/master --hard")
+                             "git reset HEAD --hard && git checkout master && git reset origin/master --hard")
                             % target_path_full)
     else:
         ret = __run_command("cd \"%s\" && git clone \"%s\" \"%s\"" % (clone_to, repo_url, folder_name))
@@ -79,7 +90,7 @@ def __do_git_clone_or_update(repo_url, clone_to, folder_name):
     return target_path_full
 
 
-def prepare_git_with_detection(repo_url, clone_to, folder_name, pr):
+def prepare_git_with_detection(repo_url, clone_to, folder_name, pr, sha=None):
     repo_path = git_clone_or_update(repo_url, clone_to, folder_name)
 
     if pr is not None:
@@ -89,6 +100,15 @@ def prepare_git_with_detection(repo_url, clone_to, folder_name, pr):
         if is_matched:
             logging.info("Checkout to sha %s" % pr["head"]["sha"])
             do_git_checkout(repo_path, pr["head"]["sha"])
+
+    elif sha is not None:
+        do_git_checkout(repo_path, sha)
+
+    setup_file_path = os.path.join(repo_path, "setup.sh")
+    if os.path.exists(setup_file_path):
+        ret = __run_command("cd \"%s\" && ./setup.sh" % repo_path)
+        if ret != 0:
+            logging.warning("Setup file failed to execute! Please check!")
 
     sha1 = do_get_sha1(repo_path)
 
@@ -159,12 +179,16 @@ def setup_modules(main_repo_path, baseline, pr):
             repo_obj["explode"] = False
 
         clone_to = os.path.join(main_repo_path, repo_obj["clone_to"])
+        sha1 = None
+
+        if "sha1" in repo_obj and repo_obj["sha1"] is not None:
+            sha1 = repo_obj["sha1"]
 
         target_clone = temp_dir
         if not repo_obj["explode"]:
             target_clone = clone_to
 
-        temp_repo_path, sha1 = prepare_git_with_detection(repo_obj["repo"], target_clone, None, pr)
+        temp_repo_path, sha1 = prepare_git_with_detection(repo_obj["repo"], target_clone, None, pr, sha1)
         repo_obj["sha1"] = sha1
 
         if repo_obj["explode"]:

@@ -4,3 +4,4 @@ aliyun-python-sdk-devops-rdc
 requests
 yamlordereddictloader
 pyyaml
+psutil
