@@ -19,7 +19,7 @@ def __kill(proc_pid):
     process.kill()
 
 
-def __run_command(command, timeout=300):
+def __run_command(command, timeout=None):
     logging.debug("Execute: %s" % command)
     p = subprocess.Popen(['/bin/sh', '-c', '%s' % command])
     try:
@@ -84,7 +84,7 @@ def __do_git_clone_or_update(repo_url, clone_to, folder_name):
                              "git reset HEAD --hard && git checkout master && git reset origin/master --hard")
                             % target_path_full)
     else:
-        ret = __run_command("cd \"%s\" && git clone \"%s\" \"%s\"" % (clone_to, repo_url, folder_name))
+        ret = __run_command("cd \"%s\" && git clone \"%s\" \"%s\"" % (clone_to, repo_url, folder_name), 600)
     if ret != 0:
         raise Exception("Git clone/update failed!!")
     return target_path_full

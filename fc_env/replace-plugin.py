@@ -1,46 +1,62 @@
+import argparse
+import logging
 import os
 import shutil
 import tempfile
 
-PLUGIN_REPLACE_SOURCE = "/Users/wgu/Desktop/plugin_modify"
-PLUGIN_REPOSITORY = "/Users/wgu/projects/mdt/org.fc.mdt.build/products/org.fc.mdt.products.desktop/target/products/metagraph.desktop/win32/win32/x86_64/plugins"
-PLUGIN_OUTPUT_TARGET = ["/Users/wgu/Desktop/plugin_modify_output"]
-
-for output in PLUGIN_OUTPUT_TARGET:
-    if not os.path.exists(output):
-        os.makedirs(output)
-
-source = os.listdir(PLUGIN_REPLACE_SOURCE)
-target = os.listdir(PLUGIN_REPOSITORY)
 
 def my_system(command):
-    print("Execute %s" % command)
+    logging.debug("Execute %s" % command)
     os.system(command)
 
 
-for source_item in source:
-    found = None
-    for candidate in target:
-        if candidate.startswith(source_item) and candidate.endswith(".jar"):
-            found = candidate
-            break
+def parse_args():
+    parser = argparse.ArgumentParser(description='Replace plugin tool.')
+    parser.add_argument('--source', help='Source to the replacement files', required=True)
+    parser.add_argument('--target', help='Target path to update', required=True)
+    args = parser.parse_args()
 
-    if found is None:
-        print("ERROR: %s cannot find candidate to replace" % source_item)
-        continue
+    return args
 
-    dirpath = tempfile.mkdtemp()
-    dirpath_inner = dirpath + "/inner"
-    os.makedirs(dirpath_inner)
 
-    my_system("cp '%s' '%s'" % (PLUGIN_REPOSITORY + "/" + found, dirpath_inner))
-    my_system("cd '%s' && jar xvf '%s' && rm -rf '%s'" % (dirpath_inner, found, found))
-    my_system("cp -rf %s/* %s/" % (PLUGIN_REPLACE_SOURCE + "/" + source_item, dirpath_inner))
-    my_system("cd '%s' && jar cmf0 META-INF/MANIFEST.MF ../%s  ." % (dirpath_inner, found))
+def replace_plugins(source_path, target_path):
+    source = os.listdir(source_path)
+    target = os.listdir(target_path)
 
-    for output in PLUGIN_OUTPUT_TARGET:
-        my_system("cp %s %s" % (dirpath + "/" + found, output))
+    for source_item in source:
+        logging.info("Find plugin to replace: %s" % source_item)
+        found = None
+        for candidate in target:
+            if candidate.startswith(source_item) and candidate.endswith(".jar") and "nl_zh_" not in candidate:
+                found = candidate
+                break
 
-    # ... do stuff with dirpath
-    shutil.rmtree(dirpath)
+        if found is None:
+            logging.warning("Cannot find candidate to replace %s" % source_item)
+            continue
 
+        logging.info("Start replace jar %s" % found)
+
+        dirpath = tempfile.mkdtemp()
+        dirpath_inner = dirpath + "/inner"
+        os.makedirs(dirpath_inner)
+
+        my_system("cp '%s' '%s'" % (os.path.join(target_path, found), dirpath_inner))
+        my_system("cd '%s' && jar xvf '%s' && rm -rf '%s'" % (dirpath_inner, found, found))
+        my_system("cp -rf %s/* %s/" % (os.path.join(source_path, source_item), dirpath_inner))
+        my_system("cd '%s' && jar cmf0 META-INF/MANIFEST.MF ../%s  ." % (dirpath_inner, found))
+
+        my_system("cp -rf %s %s" % (os.path.join(dirpath, found), target_path))
+
+        # ... do stuff with dirpath
+        shutil.rmtree(dirpath)
+
+
+def main():
+    logging.basicConfig(level=logging.DEBUG)
+    args = parse_args()
+    replace_plugins(args.source, args.target)
+
+
+if __name__ == "__main__":
+    main()

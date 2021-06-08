@@ -1,0 +1,37 @@
+FROM debian:stretch as builder
+
+RUN apt-get update -y && DEBIAN_FRONTEND=noninteractive apt-get install --no-install-recommends -y \
+      build-essential \
+      scons \
+      unzip \
+      wget \
+      ca-certificates \
+      zlib1g-dev
+
+ENV NSIS_VERSION=3.03
+
+WORKDIR /nsis
+
+RUN wget -q -O nsis-${NSIS_VERSION}-src.tar.bz2 "http://downloads.sourceforge.net/project/nsis/NSIS 3/${NSIS_VERSION}/nsis-${NSIS_VERSION}-src.tar.bz2?use_mirror=autoselect" && \
+    wget -q -O nsis.zip "http://downloads.sourceforge.net/project/nsis/NSIS 3/${NSIS_VERSION}/nsis-${NSIS_VERSION}.zip?use_mirror=autoselect" && \
+    tar -jxf nsis-${NSIS_VERSION}-src.tar.bz2 && \
+    unzip nsis.zip -d /nsis
+
+WORKDIR /nsis/nsis-$NSIS_VERSION-src
+
+RUN scons NSIS_MAX_STRLEN=8192 NSIS_CONFIG_CONST_DATA_PATH=no SKIPSTUBS=all SKIPPLUGINS=all SKIPUTILS=all SKIPMISC=all PREFIX=/nsis/nsis-$NSIS_VERSION install-compiler && \
+    mv /nsis/nsis-$NSIS_VERSION/makensis /nsis/nsis-$NSIS_VERSION/Bin/ #no idea why this is necessary, it looks for everything in ../
+
+RUN mv /nsis/nsis-$NSIS_VERSION /nsis/nsis
+
+FROM ubuntu:16.04
+MAINTAINER Wenqing Gu <wenqing.gu@gmail.com>
+
+COPY .step/*.sh /root/
+COPY nsis/step.sh /root/step.sh
+
+RUN chmod +x /root/*.sh
+
+COPY --from=builder /nsis/nsis/ /nsis/
+
+WORKDIR /installer

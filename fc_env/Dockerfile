@@ -1,6 +1,6 @@
 FROM registry.cn-beijing.aliyuncs.com/rdc-builds/base:1.0
 
-RUN apt update && apt install -y git make jq ssh
+RUN apt update && apt install -y git make jq ssh python3 python3-pip curl openjdk-8-jdk zip
 RUN mkdir -p /root/.ssh && ssh-keyscan -t rsa github.com >> ~/.ssh/known_hosts && ssh-keyscan -t rsa gitee.com >> ~/.ssh/known_hosts
 
 WORKDIR /root
