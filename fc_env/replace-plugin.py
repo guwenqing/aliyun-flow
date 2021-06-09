@@ -24,32 +24,47 @@ def replace_plugins(source_path, target_path):
     target = os.listdir(target_path)
 
     for source_item in source:
-        logging.info("Find plugin to replace: %s" % source_item)
-        found = None
-        for candidate in target:
-            if candidate.startswith(source_item) and candidate.endswith(".jar") and "nl_zh_" not in candidate:
-                found = candidate
-                break
+        if source_item.startswith("."):
+            continue
 
-        if found is None:
+        logging.info("Find plugin to replace: %s" % source_item)
+        found_jar_list = []
+        found_dir_list = []
+
+        for candidate in target:
+            if candidate.startswith(source_item + "_"):
+                if candidate.endswith(".jar"):
+                    found_jar_list.append(candidate)
+                else:
+                    found_dir_list.append(candidate)
+
+        if len(found_jar_list) == 0 and len(found_dir_list) == 0:
             logging.warning("Cannot find candidate to replace %s" % source_item)
             continue
 
-        logging.info("Start replace jar %s" % found)
+        if len(found_jar_list) + len(found_dir_list) != 1:
+            logging.warning("Multiple entries found for %s" % source_item)
+            continue
 
-        dirpath = tempfile.mkdtemp()
-        dirpath_inner = dirpath + "/inner"
-        os.makedirs(dirpath_inner)
+        for found in found_jar_list:
+            logging.info("Start replace jar %s" % found)
 
-        my_system("cp '%s' '%s'" % (os.path.join(target_path, found), dirpath_inner))
-        my_system("cd '%s' && jar xvf '%s' && rm -rf '%s'" % (dirpath_inner, found, found))
-        my_system("cp -rf %s/* %s/" % (os.path.join(source_path, source_item), dirpath_inner))
-        my_system("cd '%s' && jar cmf0 META-INF/MANIFEST.MF ../%s  ." % (dirpath_inner, found))
+            dirpath = tempfile.mkdtemp()
+            dirpath_inner = dirpath + "/inner"
+            os.makedirs(dirpath_inner)
 
-        my_system("cp -rf %s %s" % (os.path.join(dirpath, found), target_path))
+            my_system("cp '%s' '%s'" % (os.path.join(target_path, found), dirpath_inner))
+            my_system("cd '%s' && jar xvf '%s' && rm -rf '%s'" % (dirpath_inner, found, found))
+            my_system("cp -rf %s/* %s/" % (os.path.join(source_path, source_item), dirpath_inner))
+            my_system("cd '%s' && jar cmf0 META-INF/MANIFEST.MF ../%s  ." % (dirpath_inner, found))
 
-        # ... do stuff with dirpath
-        shutil.rmtree(dirpath)
+            my_system("cp -rf %s %s" % (os.path.join(dirpath, found), target_path))
+
+            # ... do stuff with dirpath
+            shutil.rmtree(dirpath)
+
+        for found in found_dir_list:
+            my_system("cp -rf %s/* %s/" % (os.path.join(source_path, source_item), os.path.join(target_path, found)))
 
 
 def main():
